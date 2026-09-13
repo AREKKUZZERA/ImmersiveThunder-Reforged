@@ -2,6 +2,14 @@ plugins {
     id 'multiloader-loader'
     id 'net.minecraftforge.gradle' version '7.0.25'
 }
+
+if (!project.forge_version) {
+    tasks.configureEach {
+        enabled = false
+    }
+    return
+}
+
 base {
     archivesName = "${mod_file_name}-forge-${minecraft_version_label}"
 }
