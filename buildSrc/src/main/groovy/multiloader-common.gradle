@@ -108,9 +108,9 @@ jar {
 }
 
 processResources {
-    var packFormat = minecraft_version.startsWith('26.') ? 82 : 64
+    var packFormat = project.findProperty('resource_pack_format') ?: (minecraft_version.startsWith('26.') ? 82 : 64)
     var packFormatFields = minecraft_version.startsWith('26.')
-            ? '"min_format": 82,\n        "max_format": 82'
+            ? "\"min_format\": ${packFormat},\n        \"max_format\": ${packFormat}"
             : '"min_format": 64,\n        "max_format": 81,\n        "supported_formats": [64, 81]'
 
     var expandProps = [

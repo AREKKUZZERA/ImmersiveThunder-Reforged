@@ -2,7 +2,7 @@ plugins {
     id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT' apply false
     id 'net.fabricmc.fabric-loom-remap' version '1.15.3' apply false
     // see https://projects.neoforged.net/neoforged/moddevgradle for new versions
-    id 'net.neoforged.moddev' version '2.0.141' apply false
+    id 'net.neoforged.moddev' version '2.0.148' apply false
 }
 
 def minecraftTarget = providers.gradleProperty('mc_target').orElse('1.21.x').get()
@@ -25,7 +25,7 @@ def releaseDir = layout.buildDirectory.dir('release')
 def minecraftTargets = fileTree('gradle/minecraft-versions') {
     include '*.properties'
 }.files.collect { it.name - '.properties' }.sort()
-def fabricReleaseTargets = ['1.21.x', '26.1.2', '26.2'] as Set
+def fabricReleaseTargets = ['1.21.x', '26.1.2', '26.2', '26.3'] as Set
 def forgeOnlyReleaseTargets = ['26.1.1'] as Set
 
 def loadersForTarget = { target ->
