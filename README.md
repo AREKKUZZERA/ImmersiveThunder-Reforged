@@ -25,6 +25,10 @@
 
 It updates the mod for newer Minecraft versions and modern Fabric releases while keeping the original immersive thunder experience intact.
 
+## Building Release Jars
+
+Run `gradlew build` on Windows or `./gradlew build` on macOS/Linux to build all configured Minecraft release targets and supported loaders. The packaged jars are copied to `build/release`, grouped by loader.
+
 ## Credits
 
 - **netcatgirl** - original creator of **[ImmersiveThunder](https://github.com/netcatgirl/ImmersiveThunder)**

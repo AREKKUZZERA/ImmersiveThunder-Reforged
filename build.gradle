@@ -1,8 +1,9 @@
 plugins {
+    id 'base'
     id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT' apply false
     id 'net.fabricmc.fabric-loom-remap' version '1.15.3' apply false
     // see https://projects.neoforged.net/neoforged/moddevgradle for new versions
-    id 'net.neoforged.moddev' version '2.0.141' apply false
+    id 'net.neoforged.moddev' version '2.0.148' apply false
 }
 
 def minecraftTarget = providers.gradleProperty('mc_target').orElse('1.21.x').get()
@@ -22,15 +23,18 @@ allprojects {
 }
 
 def releaseDir = layout.buildDirectory.dir('release')
+def excludedReleaseTargets = ['1.21.8'] as Set
 def minecraftTargets = fileTree('gradle/minecraft-versions') {
     include '*.properties'
-}.files.collect { it.name - '.properties' }.sort()
+}.files.collect { it.name - '.properties' }.findAll { !excludedReleaseTargets.contains(it) }.sort()
 def fabricReleaseTargets = ['1.21.x', '26.1.2', '26.2'] as Set
+def fabricOnlyReleaseTargets = ['26.3'] as Set
 def forgeOnlyReleaseTargets = ['26.1.1'] as Set
 
 def loadersForTarget = { target ->
     forgeOnlyReleaseTargets.contains(target)
             ? ['forge']
+            : fabricOnlyReleaseTargets.contains(target) ? ['fabric', 'neoforge']
             : fabricReleaseTargets.contains(target) ? ['fabric', 'forge', 'neoforge'] : ['forge', 'neoforge']
 }
 
@@ -85,10 +89,15 @@ def releaseBuildTasks = minecraftTargets.collect { target ->
 releaseBuildTasks.eachWithIndex { taskProvider, index ->
     taskProvider.configure {
         mustRunAfter project.tasks.named('cleanPackageOutputs')
+        mustRunAfter subprojects.collect { it.tasks.named('build') }
         if (index > 0) {
             mustRunAfter releaseBuildTasks[index - 1]
         }
     }
+}
+
+tasks.named('cleanPackageOutputs').configure {
+    mustRunAfter subprojects.collect { it.tasks.named('build') }
 }
 
 tasks.register('packageRelease', Copy) {
@@ -121,5 +130,10 @@ tasks.register('cleanRealese') {
 tasks.register('buildRealeseJars') {
     group = 'release'
     description = 'Deprecated alias for packageRelease.'
+    dependsOn tasks.named('packageRelease')
+}
+
+tasks.named('build').configure {
+    description = 'Build all configured release jars for Minecraft.'
     dependsOn tasks.named('packageRelease')
 }
