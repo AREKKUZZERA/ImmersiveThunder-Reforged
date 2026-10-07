@@ -1,9 +1,12 @@
 package com.netcatgirl.immersivethunder.mixin;
 
+import com.netcatgirl.immersivethunder.Constants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.level.levelgen.Heightmap;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -13,27 +16,17 @@ import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * Prevents Sound Physics Remastered from completely absorbing replacement thunder.
- *
- * <p>Sound Physics normally disables environmental processing for vanilla thunder. We still
- * want its occlusion and reverb for our replacement sounds, but its direct diagonal ray to a
- * distant bolt greatly overestimates the material above a shallow underground listener. Thunder
- * instead uses the solid vertical overburden and measured low-frequency soil attenuation.</p>
- */
 @Pseudo
 @Mixin(targets = "com.sonicether.soundphysics.SoundPhysics", remap = false)
 public abstract class SoundPhysicsCompatibilityMixin {
 
-    // Oelze et al. measured soil at 0.12-0.96 dB/(cm*kHz) (doi:10.2136/sssaj2002.7880).
-    // Extrapolated to thunder's approximately 200 Hz peak (doi:10.1029/JZ072i024p06149), the
-    // conservative low end is about 2.4 dB per metre. Sound Physics maps one occlusion unit to
-    // approximately 2.606 dB of direct gain reduction with its default settings.
+    // Convert the estimated 2.4 dB per solid block to Sound Physics occlusion units.
     @Unique
-    private static final double THUNDER_OCCLUSION_PER_SOLID_BLOCK = 2.4D / 2.606D;
+    private static final double THUNDER_OCCLUSION_PER_BLOCK = 2.4D / 2.606D;
 
+    // Sound Physics already accounts for the sound path; limit the extra listener-roof estimate.
     @Unique
-    private static final int MAX_MEASURED_OVERBURDEN = 24;
+    private static final double MAX_ADDITIONAL_THUNDER_OCCLUSION = 3.0D;
 
     @Inject(
             method = "calculateOcclusion",
@@ -42,33 +35,47 @@ public abstract class SoundPhysicsCompatibilityMixin {
             require = 0,
             remap = false
     )
-    private static void immersivethunder$adjustThunderOcclusion(
+    private static void immersivethunder$addRoofOcclusion(
             @Coerce Object soundPosition,
             @Coerce Object playerPosition,
             @Coerce Object soundSource,
             @Coerce Object soundEvent,
             CallbackInfoReturnable<Double> callback
     ) {
-        if (immersivethunder$isReplacementThunder(soundEvent)) {
-            callback.setReturnValue(immersivethunder$measureOverburden() * THUNDER_OCCLUSION_PER_SOLID_BLOCK);
+        if (!immersivethunder$isReplacementThunder(soundEvent)) {
+            return;
+        }
+
+        double soundPhysicsOcclusion = callback.getReturnValue();
+        if (!Double.isFinite(soundPhysicsOcclusion)) {
+            return;
+        }
+
+        double roofOcclusion = immersivethunder$measureRoofOcclusion();
+        if (roofOcclusion > 0.0D) {
+            callback.setReturnValue(soundPhysicsOcclusion + roofOcclusion);
         }
     }
 
     @Unique
     private static boolean immersivethunder$isReplacementThunder(Object soundEvent) {
-        String id = soundEvent.toString();
-        return id.equals("immersivethunder:thunder_close")
-                || id.equals("immersivethunder:thunder_medium")
-                || id.equals("immersivethunder:thunder_far");
+        if (!(soundEvent instanceof SoundEvent event)) {
+            return false;
+        }
+
+        Object soundId = BuiltInRegistries.SOUND_EVENT.getKey(event);
+        return Constants.THUNDER_CLOSE.equals(soundId)
+                || Constants.THUNDER_MEDIUM.equals(soundId)
+                || Constants.THUNDER_FAR.equals(soundId);
     }
 
     @Unique
-    private static int immersivethunder$measureOverburden() {
+    private static double immersivethunder$measureRoofOcclusion() {
         Minecraft minecraft = Minecraft.getInstance();
         ClientLevel level = minecraft.level;
         LocalPlayer player = minecraft.player;
         if (level == null || player == null) {
-            return 0;
+            return 0.0D;
         }
 
         BlockPos playerPosition = player.blockPosition();
@@ -77,19 +84,28 @@ public abstract class SoundPhysicsCompatibilityMixin {
                 playerPosition.getX(),
                 playerPosition.getZ()
         );
-        int solidBlocks = 0;
+        int firstSampleY = playerPosition.getY() + 2;
+        if (surfaceY <= firstSampleY) {
+            return 0.0D;
+        }
+
+        double additionalOcclusion = 0.0D;
         BlockPos.MutableBlockPos samplePosition = new BlockPos.MutableBlockPos(
                 playerPosition.getX(),
-                playerPosition.getY() + 2,
+                firstSampleY,
                 playerPosition.getZ()
         );
 
-        // Start above the player's head so the floor and blocks beside the listener do not count.
-        for (int y = playerPosition.getY() + 2; y < surfaceY && solidBlocks < MAX_MEASURED_OVERBURDEN; y++) {
-            if (!level.getBlockState(samplePosition.setY(y)).isAir()) {
-                solidBlocks++;
+        for (int y = firstSampleY; y < surfaceY && additionalOcclusion < MAX_ADDITIONAL_THUNDER_OCCLUSION; y++) {
+            BlockPos sample = samplePosition.setY(y);
+            if (!level.getBlockState(sample).getCollisionShape(level, sample).isEmpty()) {
+                additionalOcclusion = Math.min(
+                        additionalOcclusion + THUNDER_OCCLUSION_PER_BLOCK,
+                        MAX_ADDITIONAL_THUNDER_OCCLUSION
+                );
             }
         }
-        return solidBlocks;
+
+        return additionalOcclusion;
     }
 }

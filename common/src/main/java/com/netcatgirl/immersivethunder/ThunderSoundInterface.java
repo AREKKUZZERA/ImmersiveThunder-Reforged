@@ -13,6 +13,6 @@ public interface ThunderSoundInterface {
     float thunderFarVolume = 10000.0f;
     float impactSoundVolume = 2.0f;
 
-    void playThunderSound(Level level, LightningBolt lightningBolt, SoundEvent soundEvent, float volume, boolean useDistance);
+    void playThunderSound(Level level, LightningBolt lightningBolt, SoundEvent soundEvent, float volume, boolean distanceDelay);
 
 }

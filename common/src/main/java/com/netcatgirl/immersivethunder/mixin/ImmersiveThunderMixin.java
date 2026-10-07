@@ -17,18 +17,18 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public class ImmersiveThunderMixin implements ThunderSoundInterface {
 
     @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;playLocalSound(DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FFZ)V"))
-    private void playSound(Level level, double x, double y, double z, SoundEvent sound, SoundSource source, float volume, float pitch, boolean useDistance) {
+    private void playSound(Level level, double x, double y, double z, SoundEvent sound, SoundSource source, float volume, float pitch, boolean distanceDelay) {
         LightningBolt lightningBolt = (LightningBolt) (Object) this;
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) {
-            level.playLocalSound(x, y, z, sound, source, volume, pitch, useDistance);
+            level.playLocalSound(x, y, z, sound, source, volume, pitch, distanceDelay);
             return;
         }
 
         double distanceToEntity = player.distanceTo(lightningBolt);
 
         if (distanceToEntity <= closeDistance) {
-            playThunderSound(level, lightningBolt, Constants.ENTITY_LIGHTNING_BOLT_THUNDER_CLOSE, thunderCloseVolume, false);
+            playThunderSound(level, lightningBolt, Constants.ENTITY_LIGHTNING_BOLT_THUNDER_CLOSE, thunderCloseVolume, true);
         } else if (distanceToEntity <= mediumDistance) {
             playThunderSound(level, lightningBolt, Constants.ENTITY_LIGHTNING_BOLT_THUNDER_MEDIUM, thunderMediumVolume, true);
         } else {
@@ -37,7 +37,7 @@ public class ImmersiveThunderMixin implements ThunderSoundInterface {
     }
 
     @Override
-    public void playThunderSound(Level level, LightningBolt lightningBolt, SoundEvent soundEvent, float volume, boolean useDistance) {
-        level.playLocalSound(lightningBolt.getX(), lightningBolt.getY(), lightningBolt.getZ(), soundEvent, SoundSource.WEATHER, volume, 0.8f, useDistance);
+    public void playThunderSound(Level level, LightningBolt lightningBolt, SoundEvent soundEvent, float volume, boolean distanceDelay) {
+        level.playLocalSound(lightningBolt.getX(), lightningBolt.getY(), lightningBolt.getZ(), soundEvent, SoundSource.WEATHER, volume, 0.8f, distanceDelay);
     }
 }
