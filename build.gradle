@@ -23,12 +23,10 @@ allprojects {
 }
 
 def releaseDir = layout.buildDirectory.dir('release')
-def excludedReleaseTargets = ['1.21.8'] as Set
-def minecraftTargets = fileTree('gradle/minecraft-versions') {
-    include '*.properties'
-}.files.collect { it.name - '.properties' }.findAll { !excludedReleaseTargets.contains(it) }.sort()
-def fabricReleaseTargets = ['1.21.x', '26.1.2', '26.2'] as Set
-def fabricOnlyReleaseTargets = ['26.3'] as Set
+def activeReleaseTargets = ['1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'] as Set
+def minecraftTargets = activeReleaseTargets.toList().sort()
+def fabricReleaseTargets = ['1.21.11', '26.1', '26.1.2'] as Set
+def fabricOnlyReleaseTargets = ['26.2', '26.3'] as Set
 def forgeOnlyReleaseTargets = ['26.1.1'] as Set
 
 def loadersForTarget = { target ->
@@ -42,13 +40,8 @@ def currentLoaders = loadersForTarget(minecraftTarget)
 
 tasks.register('cleanPackageOutputs', Delete) {
     group = 'build'
-    description = 'Delete packaged loader jar outputs.'
+    description = 'Delete packaged release outputs in build/release.'
     delete releaseDir
-    delete subprojects.collect { subproject ->
-        subproject.fileTree(subproject.layout.buildDirectory.dir('libs')) {
-            include '*.jar'
-        }
-    }
 }
 
 tasks.register('packageMod') {
@@ -100,14 +93,19 @@ tasks.named('cleanPackageOutputs').configure {
     mustRunAfter subprojects.collect { it.tasks.named('build') }
 }
 
+def releaseArtifactsByLoader = ['fabric', 'forge', 'neoforge'].collectEntries { loader ->
+    def allowedTargets = minecraftTargets.findAll { target -> loadersForTarget(target).contains(loader) }
+    [(loader): allowedTargets.collect { target -> "*-${loader}-${target}-*.jar" }]
+}
+
 tasks.register('packageRelease', Copy) {
     group = 'release'
-    description = 'Build all release jars and copy them to build/release by loader.'
+    description = 'Build configured release jars and copy them to build/release by loader.'
     dependsOn tasks.named('cleanPackageOutputs')
     dependsOn releaseBuildTasks
     ['fabric', 'forge', 'neoforge'].each { loader ->
         from(project(":${loader}").layout.buildDirectory.dir('libs')) {
-            include '*.jar'
+            include releaseArtifactsByLoader[loader]
             exclude '*-sources.jar', '*-javadoc.jar'
             into loader
         }
@@ -134,6 +132,6 @@ tasks.register('buildRealeseJars') {
 }
 
 tasks.named('build').configure {
-    description = 'Build all configured release jars for Minecraft.'
+    description = 'Build and package all active release jars for Minecraft.'
     dependsOn tasks.named('packageRelease')
 }
